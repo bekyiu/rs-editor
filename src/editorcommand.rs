@@ -1,6 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crate::terminal::Size;
 
+#[derive(Clone, Copy)]
 pub enum Direction {
     PageUp,
     PageDown,
@@ -12,13 +13,16 @@ pub enum Direction {
     Down,
 }
 
+#[derive(Clone, Copy)]
 pub enum EditorCommand {
     Move(Direction),
     Resize(Size),
     Insert(char),
     Backspace,
     Delete,
+    Enter,
     Quit,
+    Save,
 }
 
 impl TryFrom<Event> for EditorCommand {
@@ -35,6 +39,10 @@ impl TryFrom<Event> for EditorCommand {
                     if modifiers == KeyModifiers::CONTROL => {
                         Ok(EditorCommand::Quit)
                     }
+                    KeyCode::Char('s')
+                    if modifiers == KeyModifiers::CONTROL => {
+                        Ok(EditorCommand::Save)
+                    }
                     KeyCode::Char(ch)
                     if modifiers == KeyModifiers::NONE || modifiers == KeyModifiers::SHIFT => {
                         Ok(EditorCommand::Insert(ch))
@@ -49,6 +57,8 @@ impl TryFrom<Event> for EditorCommand {
                     KeyCode::Home => Ok(EditorCommand::Move(Direction::Home)),
                     KeyCode::Delete => Ok(EditorCommand::Delete),
                     KeyCode::Backspace => Ok(EditorCommand::Backspace),
+                    KeyCode::Enter => Ok(EditorCommand::Enter),
+                    KeyCode::Tab => Ok(EditorCommand::Insert('\t')),
                     _ => Err(format!("Key Code not supported: {code:?}")),
                 }
             }

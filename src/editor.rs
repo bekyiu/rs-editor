@@ -5,12 +5,21 @@ use std::panic::{set_hook, take_hook};
 use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
 
 use crate::editorcommand::EditorCommand;
-use crate::terminal::Terminal;
+use crate::statusbar::StatusBar;
+use crate::terminal::{Size, Terminal};
 use crate::view::View;
+use crate::uicomponent::UIComponent;
 
+pub const NAME: &str = env!("CARGO_PKG_NAME");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Default)]
 pub struct Editor {
     should_quit: bool,
     view: View,
+    status_bar: StatusBar,
+    terminal_size: Size,
+    title: String,
 }
 
 impl Editor {
@@ -24,12 +33,23 @@ impl Editor {
         }));
         Terminal::initialize()?;
 
-        let mut this = Self {
-            should_quit: false,
-            view: View::default(),
-        };
+        let mut this = Self::default();
+        let size = Terminal::size().unwrap_or_default();
+        this.resize(size);
+
+
         this.handle_args();
+        this.refresh_status();
         Ok(this)
+    }
+
+    pub fn refresh_status(&mut self) {
+        let status = self.view.get_status();
+        let title = format!("{} - {NAME}", status.filename);
+        self.status_bar.update_status(status);
+        if title != self.title && matches!(Terminal::set_title(&title), Ok(())) {
+            self.title = title;
+        }
     }
 
     pub fn run(&mut self) {
@@ -48,7 +68,24 @@ impl Editor {
                     }
                 }
             }
+            let status = self.view.get_status();
+            self.status_bar.update_status(status);
         }
+    }
+
+    fn resize(&mut self, size: Size) {
+        self.terminal_size = size;
+
+        self.view.resize(Size {
+            // 空出两行
+            height: size.height.saturating_sub(2),
+            width: size.width,
+        });
+
+        self.status_bar.resize(Size {
+            height: 1,
+            width: size.width,
+        });
     }
 
     fn handle_args(&mut self) {
@@ -69,6 +106,8 @@ impl Editor {
             if let Ok(cmd) = EditorCommand::try_from(event) {
                 if matches!(cmd, EditorCommand::Quit) {
                     self.should_quit = true;
+                } else if let EditorCommand::Resize(size) = cmd {
+                    self.resize(size);
                 } else {
                     self.view.handle_command(cmd);
                 }
@@ -82,8 +121,16 @@ impl Editor {
     }
 
     fn refresh_screen(&mut self) {
+        if self.terminal_size.height == 0 || self.terminal_size.width == 0 {
+            return;
+        }
         let _ = Terminal::hide_caret();
-        self.view.render();
+        if self.terminal_size.height > 1 {
+            self.status_bar.render(self.terminal_size.height.saturating_sub(2));
+        }
+        if self.terminal_size.height > 2 {
+            self.view.render(0);
+        }
         let _ = Terminal::move_caret_to(self.view.caret_position());
         let _ = Terminal::show_caret();
         let _ = Terminal::execute();

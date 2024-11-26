@@ -3,10 +3,10 @@ use std::io::{Error, stdout, Write};
 
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::{Command, queue};
-use crossterm::style::Print;
-use crossterm::terminal::{Clear, ClearType, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, size};
+use crossterm::style::{Attribute, Print};
+use crossterm::terminal::{Clear, ClearType, DisableLineWrap, enable_raw_mode, EnableLineWrap, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, size};
 
-#[derive(Copy, Clone, Default)]
+#[derive(Default, Copy, Clone, Eq, PartialEq)]
 pub struct Size {
     pub height: usize,
     pub width: usize,
@@ -42,12 +42,14 @@ impl Terminal {
     pub fn initialize() -> Result<(), Error> {
         enable_raw_mode()?;
         Self::enter_alternate_screen()?;
+        Self::disable_line_wrap()?;
         Self::clear_screen()?;
         Self::execute()
     }
 
     pub fn terminate() -> Result<(), Error> {
         Self::leave_alternate_screen()?;
+        Self::enable_line_wrap()?;
         Self::show_caret()?;
         Self::execute()?;
         enable_raw_mode()?;
@@ -110,6 +112,34 @@ impl Terminal {
 
     pub fn execute() -> Result<(), Error> {
         stdout().flush()?;
+        Ok(())
+    }
+
+    pub fn print_inverted_row(row: usize, line_text: &str) -> Result<(), Error> {
+        let width = Self::size()?.width;
+        Self::print_row(
+            row,
+            &format!(
+                "{}{:width$.width$}{}",
+                Attribute::Reverse,
+                line_text,
+                Attribute::Reset
+            ),
+        )
+    }
+
+    pub fn disable_line_wrap() -> Result<(), Error> {
+        Self::queue_command(DisableLineWrap)?;
+        Ok(())
+    }
+
+    pub fn enable_line_wrap() -> Result<(), Error> {
+        Self::queue_command(EnableLineWrap)?;
+        Ok(())
+    }
+
+    pub fn set_title(title: &str) -> Result<(), Error> {
+        Self::queue_command(SetTitle(title))?;
         Ok(())
     }
 
